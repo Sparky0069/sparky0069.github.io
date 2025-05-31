@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta ch
-arset="UTF-8">
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fretboard Visualizer</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; }
+    body { font-family: Arial, sans-serif; text-align: center; background-color: white; color: black; }
     canvas { border: 2px solid black; margin-top: 20px; }
     label, select { margin: 10px; }
     .legend { margin-top: 20px; font-size: 14px; }
+    .night-mode body { background-color: black; color: white; }
   </style>
 </head>
 <body>
@@ -29,6 +29,9 @@ arset="UTF-8">
     <option value="locrian">Locrian</option>
     <option value="major_pent">Major Pentatonic</option>
     <option value="minor_pent">Minor Pentatonic</option>
+    <option value="harmonic_minor">Harmonic Minor</option>
+    <option value="melodic_minor">Melodic Minor</option>
+    <option value="whole_tone">Whole Tone</option>
   </select>
 
   <label for="handedness">Handedness:</label>
@@ -36,6 +39,18 @@ arset="UTF-8">
     <option value="right">Right</option>
     <option value="left">Left</option>
   </select>
+
+  <label for="colorTheme">Note Color:</label>
+  <select id="colorTheme">
+    <option value="blue" selected>Blue</option>
+    <option value="green">Green</option>
+    <option value="red">Red</option>
+    <option value="orange">Orange</option>
+    <option value="yellow">Yellow</option>
+  </select>
+
+  <label for="nightMode">Night Mode:</label>
+  <input type="checkbox" id="nightMode" />
 
   <canvas id="fretboardCanvas" width="1800" height="400"></canvas>
 
@@ -51,15 +66,26 @@ arset="UTF-8">
     const ctx = canvas.getContext("2d");
 
     const scalePatterns = {
-      ionian:       [0, 2, 4, 5, 7, 9, 11],
-      dorian:       [0, 2, 3, 5, 7, 9, 10],
-      phrygian:     [0, 1, 3, 5, 7, 8, 10],
-      lydian:       [0, 2, 4, 6, 7, 9, 11],
-      mixolydian:   [0, 2, 4, 5, 7, 9, 10],
-      aeolian:      [0, 2, 3, 5, 7, 8, 10],
-      locrian:      [0, 1, 3, 5, 6, 8, 10],
-      major_pent:   [0, 2, 4, 7, 9],
-      minor_pent:   [0, 3, 5, 7, 10]
+      ionian:         [0, 2, 4, 5, 7, 9, 11],
+      dorian:         [0, 2, 3, 5, 7, 9, 10],
+      phrygian:       [0, 1, 3, 5, 7, 8, 10],
+      lydian:         [0, 2, 4, 6, 7, 9, 11],
+      mixolydian:     [0, 2, 4, 5, 7, 9, 10],
+      aeolian:        [0, 2, 3, 5, 7, 8, 10],
+      locrian:        [0, 1, 3, 5, 6, 8, 10],
+      major_pent:     [0, 2, 4, 7, 9],
+      minor_pent:     [0, 3, 5, 7, 10],
+      harmonic_minor: [0, 2, 3, 5, 7, 8, 11],
+      melodic_minor:  [0, 2, 3, 5, 7, 9, 11],
+      whole_tone:     [0, 2, 4, 6, 8, 10]
+    };
+
+    const colorThemes = {
+      blue: ['#004080', '#99ccff'],
+      green: ['#006600', '#99ff99'],
+      red: ['#800000', '#ff9999'],
+      orange: ['#994d00', '#ffcc99'],
+      yellow: ['#999900', '#ffff99']
     };
 
     function fillDropdown(id, options) {
@@ -73,7 +99,7 @@ arset="UTF-8">
 
     fillDropdown("rootNote", noteNames);
 
-    document.querySelectorAll("select").forEach(el => el.addEventListener("change", drawFretboard));
+    document.querySelectorAll("select, input[type='checkbox']").forEach(el => el.addEventListener("change", drawFretboard));
 
     function getNoteAt(stringNote, fret) {
       const index = (noteNames.indexOf(stringNote) + fret) % 12;
@@ -85,25 +111,34 @@ arset="UTF-8">
       const root = document.getElementById("rootNote").value;
       const scaleType = document.getElementById("scaleType").value;
       const handedness = document.getElementById("handedness").value;
+      const colorTheme = document.getElementById("colorTheme").value;
+      const nightMode = document.getElementById("nightMode").checked;
       const pattern = scalePatterns[scaleType];
       const rootIndex = noteNames.indexOf(root);
+      const [rootColor, noteColor] = colorThemes[colorTheme];
 
+      document.body.style.backgroundColor = nightMode ? "black" : "white";
+      document.body.style.color = nightMode ? "white" : "black";
+
+      const currentTuning = [...tuning].reverse();
       const width = canvas.width / (frets + 1);
       const height = canvas.height / tuning.length;
 
-      tuning.forEach((stringNote, stringIdx) => {
-        const y = height * (handedness === 'left' ? stringIdx : tuning.length - 1 - stringIdx);
-        for (let fret = 0; fret <= frets; fret++) {
-          const x = width * fret;
+      currentTuning.forEach((stringNote, idx) => {
+        const y = height * idx;
+        const fretRange = handedness === 'left'
+          ? Array.from({length: frets + 1}, (_, i) => frets - i)
+          : Array.from({length: frets + 1}, (_, i) => i);
+
+        fretRange.forEach(fret => {
+          const x = width * (handedness === 'left' ? frets - fret : fret);
           const note = getNoteAt(stringNote, fret);
           const noteIndex = (noteNames.indexOf(note) - rootIndex + 12) % 12;
-          let fill = 'white';
-          let text = 'black';
+          let fill = nightMode ? '#bbb' : 'white';
+          let text = nightMode ? 'white' : 'black';
 
-          if (note === root) fill = '#226622'; // dark green for root
-          else if (pattern.includes(noteIndex)) {
-            fill = '#66cc66'; // green for scale notes
-          }
+          if (note === root) fill = rootColor;
+          else if (pattern.includes(noteIndex)) fill = noteColor;
 
           ctx.fillStyle = fill;
           ctx.strokeStyle = "black";
@@ -111,18 +146,24 @@ arset="UTF-8">
           ctx.fillRect(x, y, width, height);
           ctx.strokeRect(x, y, width, height);
 
-          ctx.fillStyle = text;
           ctx.font = "bold 14px sans-serif";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
+
+          if (nightMode) {
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.strokeText(note, x + width / 2, y + height / 2);
+          }
+
+          ctx.fillStyle = text;
           ctx.fillText(note, x + width / 2, y + height / 2);
-        }
+        });
       });
 
-      // Draw fret numbers on top
       for (let fret = 0; fret <= frets; fret++) {
-        const x = width * fret;
-        ctx.fillStyle = [3, 5, 7, 9, 12, 15, 17, 19, 21, 23].includes(fret) ? 'black' : 'gray';
+        const x = width * (handedness === 'left' ? frets - fret : fret);
+        ctx.fillStyle = nightMode ? 'white' : ([3, 5, 7, 9, 12, 15, 17, 19, 21, 23].includes(fret) ? 'black' : 'gray');
         ctx.font = "bold 12px sans-serif";
         ctx.fillText(fret.toString(), x + width / 2, 10);
       }
