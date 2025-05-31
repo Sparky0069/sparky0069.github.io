@@ -7,16 +7,15 @@
   <style>
     body { font-family: Arial, sans-serif; text-align: center; background-color: white; color: black; }
     canvas { border: 2px solid black; margin-top: 20px; }
-    label, select { margin: 10px; }
+    label, select, input { margin: 10px; }
     .legend { margin-top: 20px; font-size: 14px; }
     .night-mode body { background-color: black; color: white; }
-    .version-info { font-size: 12px; margin-top: -10px; margin-bottom: 20px; color: gray; }
-    .footer { font-size: 10px; margin-top: 40px; color: gray; }
+    .small-text { font-size: 0.8em; color: gray; }
   </style>
 </head>
 <body>
   <h1>Shreddy Roosevelt's Shreducator & Fretboard Visualizer</h1>
-  <div class="version-info">Version 1.01</div>
+  <div class="small-text">Version 1.02</div>
 
   <label for="rootNote">Root Note:</label>
   <select id="rootNote"></select>
@@ -55,13 +54,38 @@
   <label for="nightMode">Night Mode:</label>
   <input type="checkbox" id="nightMode" />
 
+  <label for="minFret">Min Fret:</label>
+  <input type="number" id="minFret" value="0" min="0" max="24" />
+
+  <label for="maxFret">Max Fret:</label>
+  <input type="number" id="maxFret" value="24" min="0" max="24" />
+
   <canvas id="fretboardCanvas" width="1800" height="400"></canvas>
 
   <div class="legend">
     <p><strong>Mode Degrees:</strong> Ionian (1), Dorian (2), Phrygian (3), Lydian (4), Mixolydian (5), Aeolian (6), Locrian (7)</p>
+    <p><a href="#" onclick="toggleMoreInfo(); return false;">Click to expand</a></p>
+    <div id="moreInfo" style="display: none; font-size: 13px;">
+      <p><strong>Descriptions:</strong></p>
+      <ul>
+        <li>Ionian: Major shape</li>
+        <li>Dorian: Minor shape with sharp sixth</li>
+        <li>Phrygian: Minor shape with flat second</li>
+        <li>Lydian: Major shape with sharp fourth</li>
+        <li>Mixolydian: Major shape with flat seventh</li>
+        <li>Aeolian: Minor shape</li>
+        <li>Locrian: Diminished shape with flat second and flat fifth</li>
+      </ul>
+      <p><strong>Common Uses:</strong></p>
+      <ul>
+        <li>Dorian: Funk, jazz fusion</li>
+        <li>Phrygian: Metal, exotic flavor</li>
+        <li>Mixolydian: Blues, dominant grooves</li>
+        <li>Lydian: Dreamy or suspended major contexts</li>
+        <li>Locrian: Rare, dark diminished sounds</li>
+      </ul>
+    </div>
   </div>
-
-  <div class="footer">© 2025 Shreddy Roosevelt. All rights reserved.</div>
 
   <script>
     const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -104,11 +128,16 @@
 
     fillDropdown("rootNote", noteNames);
 
-    document.querySelectorAll("select, input[type='checkbox']").forEach(el => el.addEventListener("change", drawFretboard));
+    document.querySelectorAll("select, input[type='checkbox'], input[type='number']").forEach(el => el.addEventListener("change", drawFretboard));
 
     function getNoteAt(stringNote, fret) {
       const index = (noteNames.indexOf(stringNote) + fret) % 12;
       return noteNames[index];
+    }
+
+    function toggleMoreInfo() {
+      const section = document.getElementById("moreInfo");
+      section.style.display = section.style.display === "none" ? "block" : "none";
     }
 
     function drawFretboard() {
@@ -118,6 +147,9 @@
       const handedness = document.getElementById("handedness").value;
       const colorTheme = document.getElementById("colorTheme").value;
       const nightMode = document.getElementById("nightMode").checked;
+      const minFret = Math.max(0, parseInt(document.getElementById("minFret").value));
+      const maxFret = Math.min(frets, parseInt(document.getElementById("maxFret").value));
+
       const pattern = scalePatterns[scaleType];
       const rootIndex = noteNames.indexOf(root);
       const [rootColor, noteColor] = colorThemes[colorTheme];
@@ -139,11 +171,13 @@
           const x = width * (handedness === 'left' ? frets - fret : fret);
           const note = getNoteAt(stringNote, fret);
           const noteIndex = (noteNames.indexOf(note) - rootIndex + 12) % 12;
-          let fill = nightMode ? '#ccc' : 'white';
+          let fill = nightMode ? '#ddd' : 'white';
           let text = nightMode ? 'white' : 'black';
 
-          if (note === root) fill = rootColor;
-          else if (pattern.includes(noteIndex)) fill = noteColor;
+          if (fret >= minFret && fret <= maxFret) {
+            if (note === root) fill = rootColor;
+            else if (pattern.includes(noteIndex)) fill = noteColor;
+          }
 
           ctx.fillStyle = fill;
           ctx.strokeStyle = "black";
