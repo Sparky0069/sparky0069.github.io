@@ -3,17 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fretboard Visualizer</title>
+  <title>Shreddy Roosevelt's Shreducator & Fretboard Visualizer</title>
   <style>
     body { font-family: Arial, sans-serif; text-align: center; background-color: white; color: black; }
     canvas { border: 2px solid black; margin-top: 20px; }
     label, select { margin: 10px; }
     .legend { margin-top: 20px; font-size: 14px; }
     .night-mode body { background-color: black; color: white; }
+    .version-info { font-size: 12px; margin-top: -10px; margin-bottom: 20px; color: gray; }
+    .footer { font-size: 10px; margin-top: 40px; color: gray; }
   </style>
 </head>
 <body>
-  <h1>Fretboard Visualizer</h1>
+  <h1>Shreddy Roosevelt's Shreducator & Fretboard Visualizer</h1>
+  <div class="version-info">Version 1.01</div>
 
   <label for="rootNote">Root Note:</label>
   <select id="rootNote"></select>
@@ -57,6 +60,8 @@
   <div class="legend">
     <p><strong>Mode Degrees:</strong> Ionian (1), Dorian (2), Phrygian (3), Lydian (4), Mixolydian (5), Aeolian (6), Locrian (7)</p>
   </div>
+
+  <div class="footer">© 2025 Shreddy Roosevelt. All rights reserved.</div>
 
   <script>
     const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -134,7 +139,7 @@
           const x = width * (handedness === 'left' ? frets - fret : fret);
           const note = getNoteAt(stringNote, fret);
           const noteIndex = (noteNames.indexOf(note) - rootIndex + 12) % 12;
-          let fill = nightMode ? '#bbb' : 'white';
+          let fill = nightMode ? '#ccc' : 'white';
           let text = nightMode ? 'white' : 'black';
 
           if (note === root) fill = rootColor;
