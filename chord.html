@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shreddy Roosevelt's Shreducator Chord Analyzer & Overlay Tool</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; background-color: white; color: black; }
+    canvas { border: 2px solid black; margin-top: 20px; background-color: #f5f5f5; }
+    label, select, input { margin: 10px; }
+    .legend { margin-top: 20px; font-size: 14px; }
+    .degree-legend span { margin: 0 10px; font-weight: bold; }
+    .control-panel { display: flex; justify-content: center; flex-wrap: wrap; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+  <h1>Shreddy Roosevelt's Shreducator Chord Analyzer & Overlay Tool</h1>
+  <div class="small-text">Beta Build 0.4</div>
+  <div class="control-panel">
+    <label for="rootNote">Root Note:</label>
+    <select id="rootNote"></select>
+
+    <label for="chordType">Chord Type:</label>
+    <select id="chordType">
+      <option value="major">Major</option>
+      <option value="minor">Minor</option>
+      <option value="dim">Diminished</option>
+      <option value="aug">Augmented</option>
+      <option value="maj7">Maj7</option>
+      <option value="min7">Min7</option>
+      <option value="dom7">Dom7</option>
+      <option value="dim7">Dim7</option>
+      <option value="halfDim7">Half-Dim7</option>
+      <option value="minMaj7">MinMaj7</option>
+    </select>
+
+    <label for="extension">Extension:</label>
+    <select id="extension">
+      <option value="none">None</option>
+      <option value="sus2">Sus2</option>
+      <option value="sus4">Sus4</option>
+      <option value="add9">Add9</option>
+      <option value="add11">Add11</option>
+      <option value="add13">Add13</option>
+    </select>
+
+    <label for="handedness">Handedness:</label>
+    <select id="handedness">
+      <option value="right">Right</option>
+      <option value="left">Left</option>
+    </select>
+
+    <label for="nightMode">Night Mode:</label>
+    <input type="checkbox" id="nightMode" />
+
+    <label for="minFret">Min Fret:</label>
+    <input type="number" id="minFret" value="0" min="0" max="24">
+
+    <label for="maxFret">Max Fret:</label>
+    <input type="number" id="maxFret" value="12" min="0" max="24">
+  </div>
+
+  <canvas id="fretboardCanvas" width="1200" height="400"></canvas>
+
+  <div class="legend degree-legend">
+    <span style="color: red;">1 (Root)</span>
+    <span style="color: orange;">b2</span>
+    <span style="color: gold;">2</span>
+    <span style="color: green;">b3</span>
+    <span style="color: limegreen;">3</span>
+    <span style="color: cyan;">4</span>
+    <span style="color: skyblue;">b5</span>
+    <span style="color: blue;">5</span>
+    <span style="color: indigo;">b6</span>
+    <span style="color: violet;">6</span>
+    <span style="color: magenta;">b7</span>
+    <span style="color: deeppink;">7</span>
+    <span style="color: #DA70D6;">9</span>
+    <span style="color: #BA55D3;">11</span>
+    <span style="color: #9932CC;">13</span>
+  </div>
+
+  <script>
+    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']; 
+    const tuning = ['E', 'A', 'D', 'G', 'B', 'E'];
+    const frets = 24;
+    const canvas = document.getElementById("fretboardCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const chordFormulas = {
+      major: [0, 4, 7],
+      minor: [0, 3, 7],
+      dim: [0, 3, 6],
+      aug: [0, 4, 8],
+      maj7: [0, 4, 7, 11],
+      min7: [0, 3, 7, 10],
+      dom7: [0, 4, 7, 10],
+      dim7: [0, 3, 6, 9],
+      halfDim7: [0, 3, 6, 10],
+      minMaj7: [0, 3, 7, 11]
+    };
+
+    const extensionFormulas = {
+      none: [],
+      sus2: [2],
+      sus4: [5],
+      add9: [14],
+      add11: [17],
+      add13: [21]
+    };
+
+    const degreeColors = {
+  0: 'red',         // 1 (Root)
+  1: 'orange',      // b2
+  2: 'gold',        // 2
+  3: 'green',       // b3
+  4: 'limegreen',   // 3
+  5: 'cyan',        // 4
+  6: 'skyblue',     // b5
+  7: 'blue',        // 5
+  8: 'indigo',      // b6
+  9: 'violet',      // 6
+  10: 'magenta',    // b7
+  11: 'deeppink',   // 7
+  14: '#DA70D6',    // 9
+  17: '#BA55D3',    // 11
+  21: '#9932CC'     // 13
+};
+
+    function getNoteAt(stringNote, fret) {
+      const index = (noteNames.indexOf(stringNote) + fret) % 12;
+      return noteNames[index];
+    }
+
+    function drawFretboard() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const root = document.getElementById("rootNote").value;
+      const chordType = document.getElementById("chordType").value;
+      const extension = document.getElementById("extension").value;
+      const handedness = document.getElementById("handedness").value;
+      const nightMode = document.getElementById("nightMode").checked;
+      const minFret = Math.max(0, parseInt(document.getElementById("minFret").value));
+      const maxFret = Math.min(frets, parseInt(document.getElementById("maxFret").value));
+
+      const formula = [...chordFormulas[chordType], ...extensionFormulas[extension]];
+      const rootIndex = noteNames.indexOf(root);
+
+      const degreeMap = new Map();
+      formula.forEach(degree => {
+        const mod = degree % 12;
+        if (!degreeMap.has(mod) || degree > degreeMap.get(mod)) {
+          degreeMap.set(mod, degree);
+        }
+      });
+
+      document.body.style.backgroundColor = nightMode ? "black" : "white";
+      document.body.style.color = nightMode ? "white" : "black";
+
+      const currentTuning = [...tuning].reverse();
+      const width = canvas.width / (frets + 1);
+      const height = canvas.height / tuning.length;
+
+      currentTuning.forEach((stringNote, idx) => {
+        const y = height * idx;
+        const fretRange = handedness === 'left'
+          ? Array.from({ length: frets + 1 }, (_, i) => frets - i)
+          : Array.from({ length: frets + 1 }, (_, i) => i);
+
+        fretRange.forEach(fret => {
+          const x = width * (handedness === 'left' ? frets - fret : fret);
+          const note = getNoteAt(stringNote, fret);
+          const noteIdx = noteNames.indexOf(note);
+          const interval = (noteIdx - rootIndex + 12) % 12;
+
+          let fill = nightMode ? '#ddd' : 'white';
+          let text = nightMode ? 'white' : 'black';
+          let label = note;
+
+          if (fret >= minFret && fret <= maxFret && degreeMap.has(interval)) {
+            const degree = degreeMap.get(interval);
+            fill = degreeColors[degree] || degreeColors[degree % 12] || '#ccc';
+            label = degree === 14 ? '9'
+                  : degree === 17 ? '11'
+                  : degree === 21 ? '13'
+                  : degree % 12 === 0 ? note
+                  : degree % 12 === 7 ? note
+                  : note;
+          }
+
+          ctx.fillStyle = fill;
+          ctx.strokeStyle = "black";
+          ctx.lineWidth = 1;
+          ctx.fillRect(x, y, width, height);
+          ctx.strokeRect(x, y, width, height);
+
+          ctx.font = "bold 14px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+
+          if (nightMode) {
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.strokeText(label, x + width / 2, y + height / 2);
+          }
+
+          ctx.fillStyle = text;
+          ctx.fillText(label, x + width / 2, y + height / 2);
+        });
+      });
+
+      for (let fret = 0; fret <= frets; fret++) {
+        const x = width * (handedness === 'left' ? frets - fret : fret);
+        ctx.fillStyle = nightMode ? 'white' : ([3, 5, 7, 9, 12, 15, 17, 19, 21, 23].includes(fret) ? 'black' : 'gray');
+        ctx.font = "bold 14px sans-serif";
+        ctx.fillText(fret.toString(), x + width / 2, 10);
+      }
+    }
+
+    const rootNoteSelect = document.getElementById("rootNote");
+    noteNames.forEach(note => {
+      const option = document.createElement("option");
+      option.value = note;
+      option.textContent = note;
+      rootNoteSelect.appendChild(option);
+    });
+
+    ["rootNote", "chordType", "extension", "handedness", "nightMode", "minFret", "maxFret"].forEach(id => {
+      document.getElementById(id).addEventListener("change", drawFretboard);
+    });
+
+    drawFretboard();
+  </script>
+</body>
+</html>
