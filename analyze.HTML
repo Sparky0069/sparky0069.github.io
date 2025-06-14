@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shreddy Roosevelt's Shreducator & Chord Analyzer</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; background-color: white; color: black; margin: 0 20px 40px; }
+    canvas { border: 2px solid black; margin-top: 20px; cursor: pointer; }
+    button { margin: 15px; padding: 8px 16px; font-size: 16px; cursor: pointer; }
+    #chordResult { margin-top: 20px; font-size: 18px; font-weight: bold; min-height: 50px; }
+    #instructions { margin-top: 15px; font-size: 14px; color: #333; max-width: 600px; margin-left: auto; margin-right: auto; }
+    .chord-name { font-size: 1.2em; margin-bottom: 5px; }
+    .chord-detail { font-size: 0.9em; font-weight: normal; margin-top: 10px; text-align: left; max-width: 500px; margin-left: auto; margin-right: auto;}
+    .chord-detail strong { font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Shreddy Roosevelt's Shreducator & Chord Analyzer</h1>
+
+  <canvas id="fretboardCanvas" width="1800" height="400"></canvas>
+  <br />
+  <button onclick="analyzeChord()">Analyze Chord</button>
+
+  <div id="chordResult"></div>
+
+  <div id="instructions">
+    <p><strong>How this works:</strong> Click notes on the fretboard to select them. The <em>first note you select is the root note</em> used for chord naming. You can add or remove notes by clicking them again. Then press "Analyze Chord" to see the chord name and other possible interpretations.</p>
+    <p>This tool recognizes all common and complex chord types — no more "Unknown chord" results.</p>
+  </div>
+
+  <script>
+    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const tuning = ['E', 'A', 'D', 'G', 'B', 'E'];
+    const basePitches = [40, 45, 50, 55, 59, 64];
+    const frets = 12;
+    const canvas = document.getElementById("fretboardCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const selectedNotes = {}; // Stores {stringIdx: {fret, note, pitch}}
+    const stringCount = tuning.length;
+    const width = canvas.width / (frets + 1);
+    const height = canvas.height / stringCount;
+
+    let rootNote = null; // The *first* note selected by the user, used as the initial root for analysis
+
+    function getNoteAt(stringNote, fret) {
+      const index = (noteNames.indexOf(stringNote) + fret) % 12;
+      return noteNames[index];
+    }
+
+    function drawFretboard() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const currentTuning = [...tuning].reverse(); // Reverse for drawing from low E (bottom) to high E (top)
+
+      currentTuning.forEach((stringNote, stringIdx) => {
+        const y = height * stringIdx;
+        // Draw string line
+        ctx.strokeStyle = "gray";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, y + height / 2);
+        ctx.lineTo(canvas.width, y + height / 2);
+        ctx.stroke();
+
+        for (let fret = 0; fret <= frets; fret++) {
+          const x = width * fret;
+          const note = getNoteAt(stringNote, fret);
+          const actualStringIdx = stringCount - 1 - stringIdx; // Convert drawing index back to actual tuning array index
+          const isSelected = selectedNotes[actualStringIdx]?.fret === fret;
+
+          ctx.fillStyle = isSelected ? '#ffcc00' : '#f0f0f0'; // Yellow for selected, light gray for unselected
+          ctx.strokeStyle = "black";
+          ctx.lineWidth = 1;
+          ctx.fillRect(x, y, width, height);
+          ctx.strokeRect(x, y, width, height);
+
+          ctx.fillStyle = "black";
+          ctx.font = "bold 14px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(note, x + width / 2, y + height / 2);
+        }
+      });
+
+      // Draw fret numbers
+      for (let fret = 0; fret <= frets; fret++) {
+        const x = width * fret;
+        ctx.fillStyle = 'gray';
+        ctx.font = "12px sans-serif";
+        ctx.fillText(fret.toString(), x + width / 2, 10);
+      }
+    }
+
+    canvas.addEventListener("click", function (e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      const fret = Math.floor(x / width);
+      const stringIdx = Math.floor(y / height);
+
+      const actualStringIdx = stringCount - 1 - stringIdx; // Convert drawing index back to actual tuning array index
+      const stringNote = tuning[actualStringIdx];
+      const note = getNoteAt(stringNote, fret);
+
+      if (selectedNotes[actualStringIdx]?.fret === fret) {
+        // If the clicked note is already selected on this string, deselect it
+        delete selectedNotes[actualStringIdx];
+        // If the deselected note was the root, clear rootNote for re-assignment
+        if (Object.values(selectedNotes).length === 0) {
+          rootNote = null;
+        } else if (rootNote === note) {
+          // If the deselected note was the current root, set a new root from remaining notes
+          rootNote = Object.values(selectedNotes)[0]?.note || null;
+        }
+      } else {
+        // Select the note
+        selectedNotes[actualStringIdx] = { fret, note };
+        if (rootNote === null) {
+          // Set the rootNote only if it's the first note selected overall
+          rootNote = note;
+        }
+      }
+
+      drawFretboard();
+      document.getElementById("chordResult").innerHTML = ""; // Clear result when notes change
+    });
+
+    function analyzeChord() {
+      const noteData = Object.values(selectedNotes)
+        .map(n => ({ ...n, pitch: basePitches[Object.keys(selectedNotes).find(key => selectedNotes[key] === n)] + n.fret })) // Add pitch for sorting
+        .sort((a, b) => a.pitch - b.pitch); // Sort by pitch to get the lowest note
+
+      if (noteData.length === 0) {
+        document.getElementById("chordResult").textContent = "No notes selected.";
+        return;
+      }
+
+      const uniqueNotes = [...new Set(noteData.map(n => n.note))]; // Unique note names (C, F, A)
+      const lowestNoteSelected = noteData[0].note; // The actual lowest note played (e.g., A in A-C-F)
+
+      // Use the user's selected rootNote for the *primary* analysis, but also try other roots for comprehensive results
+      const analysisRoots = [rootNote, ...uniqueNotes.filter(n => n !== rootNote)];
+
+      let bestResult = null;
+      let bestOutput = '';
+
+      for (const currentRoot of analysisRoots) {
+        const rootIndex = noteNames.indexOf(currentRoot);
+        const intervals = uniqueNotes
+          .map(n => (noteNames.indexOf(n) - rootIndex + 12) % 12)
+          .sort((a, b) => a - b);
+
+        const chordNames = chordNamesFromIntervals(intervals);
+
+        if (chordNames.length > 0) {
+          const mainChordName = chordNames[0];
+          const isTriad = ['Major', 'Minor', 'Diminished', 'Augmented'].includes(mainChordName);
+          let inversionInfo = '';
+          let detailedExplanation = '';
+          let actualChordRoot = currentRoot; // Assume currentRoot is the chord root initially
+
+          if (isTriad) {
+            // Find the actual root of the triad for inversion calculation
+            const potentialTriadNotes = uniqueNotes.sort((a, b) => noteNames.indexOf(a) - noteNames.indexOf(b));
+            
+            let possibleTriadRoots = [];
+            if (mainChordName === 'Major') {
+                for (const potentialRoot of potentialTriadNotes) {
+                    const rootIdx = noteNames.indexOf(potentialRoot);
+                    if (uniqueNotes.includes(noteNames[(rootIdx + 4) % 12]) && uniqueNotes.includes(noteNames[(rootIdx + 7) % 12])) {
+                        possibleTriadRoots.push(potentialRoot);
+                    }
+                }
+            } else if (mainChordName === 'Minor') {
+                for (const potentialRoot of potentialTriadNotes) {
+                    const rootIdx = noteNames.indexOf(potentialRoot);
+                    if (uniqueNotes.includes(noteNames[(rootIdx + 3) % 12]) && uniqueNotes.includes(noteNames[(rootIdx + 7) % 12])) {
+                        possibleTriadRoots.push(potentialRoot);
+                    }
+                }
+            } else if (mainChordName === 'Diminished') {
+                for (const potentialRoot of potentialTriadNotes) {
+                    const rootIdx = noteNames.indexOf(potentialRoot);
+                    if (uniqueNotes.includes(noteNames[(rootIdx + 3) % 12]) && uniqueNotes.includes(noteNames[(rootIdx + 6) % 12])) {
+                        possibleTriadRoots.push(potentialRoot);
+                    }
+                }
+            } else if (mainChordName === 'Augmented') {
+                for (const potentialRoot of potentialTriadNotes) {
+                    const rootIdx = noteNames.indexOf(potentialRoot);
+                    if (uniqueNotes.includes(noteNames[(rootIdx + 4) % 12]) && uniqueNotes.includes(noteNames[(rootIdx + 8) % 12])) {
+                        possibleTriadRoots.push(potentialRoot);
+                    }
+                }
+            }
+
+            if (possibleTriadRoots.length > 0) {
+                // If multiple roots are possible (e.g., A# Major could also be F## Major),
+                // prioritize the one that makes sense with the currentRoot chosen by the user.
+                actualChordRoot = possibleTriadRoots.find(r => r === currentRoot) || possibleTriadRoots[0];
+                
+                const sortedUniqueNotes = uniqueNotes.sort((a, b) => {
+                    const aIndex = noteNames.indexOf(a);
+                    const bIndex = noteNames.indexOf(b);
+                    const actualRootIndex = noteNames.indexOf(actualChordRoot);
+
+                    // Sort relative to the actualChordRoot for inversion logic
+                    return (aIndex - actualRootIndex + 12) % 12 - (bIndex - actualRootIndex + 12) % 12;
+                });
+                
+                const bassNote = lowestNoteSelected; // The lowest actual note played
+                const actualRootIdx = noteNames.indexOf(actualChordRoot);
+                const bassNoteIdx = noteNames.indexOf(bassNote);
+                const intervalFromRootToBass = (bassNoteIdx - actualRootIdx + 12) % 12;
+
+                let inversionName = '';
+                if (intervalFromRootToBass === 0) {
+                    inversionName = 'Root Position';
+                } else if (intervalFromRootToBass === 3 || intervalFromRootToBass === 4) { // Minor 3rd or Major 3rd
+                    inversionName = 'First Inversion';
+                } else if (intervalFromRootToBass === 7) { // Perfect 5th
+                    inversionName = 'Second Inversion';
+                }
+
+                if (inversionName) {
+                    inversionInfo = `<div class="chord-name"><strong>${actualChordRoot} ${mainChordName}</strong> (${inversionName})</div>`;
+                    
+                    const triadNotes = [
+                        actualChordRoot,
+                        noteNames[(actualRootIdx + (mainChordName === 'Major' ? 4 : 3)) % 12],
+                        noteNames[(actualRootIdx + 7) % 12]
+                    ].sort((a, b) => noteNames.indexOf(a) - noteNames.indexOf(b));
+
+                    const triadNotesString = triadNotes.join(', ');
+
+                    detailedExplanation = `
+                        <div class="chord-detail">
+                            <p>You selected: <strong>${uniqueNotes.join(', ')}</strong>. The lowest note played is <strong>${lowestNoteSelected}</strong>.</p>
+                            <p>This is identified as an <strong>${actualChordRoot} ${mainChordName}</strong> chord.</p>
+                            <p>An ${actualChordRoot} ${mainChordName} triad consists of the notes: <strong>${triadNotesString}</strong> (in any order).</p>
+                            <p>Since <strong>${lowestNoteSelected}</strong> is the lowest note played and the actual root is <strong>${actualChordRoot}</strong>, this chord is in <strong>${inversionName}</strong>.</p>
+                            <ul>
+                                <li><strong>Root Position:</strong> If ${actualChordRoot} is the lowest note (e.g., ${actualChordRoot}-${triadNotes[1]}-${triadNotes[2]}).</li>
+                                <li><strong>First Inversion:</strong> If ${triadNotes[1]} is the lowest note (e.g., ${triadNotes[1]}-${triadNotes[2]}-${actualChordRoot} or ${triadNotes[1]}-${actualChordRoot}-${triadNotes[2]}).</li>
+                                <li><strong>Second Inversion:</strong> If ${triadNotes[2]} is the lowest note (e.g., ${triadNotes[2]}-${actualChordRoot}-${triadNotes[1]} or ${triadNotes[2]}-${triadNotes[1]}-${actualChordRoot}).</li>
+                            </ul>
+                        </div>
+                    `;
+                }
+            }
+          }
+
+          // If no specific triad inversion explanation, provide a general one
+          if (!detailedExplanation) {
+              const intervalNames = intervals.map(intervalToName).join(', ');
+              inversionInfo = `<div class="chord-name"><strong>${currentRoot} ${mainChordName}</strong></div>`;
+              detailedExplanation = `
+                <div class="chord-detail">
+                    <p>You selected notes: <strong>${uniqueNotes.join(', ')}</strong>.</p>
+                    <p>Relative to your selected root <strong>${currentRoot}</strong>, the intervals are: <strong>${intervalNames}</strong>.</p>
+                </div>
+            `;
+          }
+
+
+          let otherInterpretations = '';
+          if (chordNames.length > 1) {
+            otherInterpretations = "<div class='chord-detail' style='margin-top: 8px;'><strong>Other possible interpretations (relative to " + currentRoot + "):</strong><br>" +
+              chordNames.slice(1).map(name => `&nbsp;&nbsp;&nbsp;&nbsp;${currentRoot} ${name}`).join("<br>") +
+              "</div>";
+          }
+
+          const currentOutput = inversionInfo + detailedExplanation + otherInterpretations;
+
+          // Store the best result based on the initial user root selection or a clear triad
+          if (currentRoot === rootNote || (isTriad && possibleTriadRoots.includes(currentRoot))) {
+            bestResult = { output: currentOutput, isTriad: isTriad, rootMatch: true };
+            bestOutput = currentOutput; // This is the primary one we want to show
+            break; // Found a good match for the user's selected root, or a clear triad
+          } else if (!bestResult || (isTriad && !bestResult.isTriad)) {
+            // If no primary result yet, or if current is a triad and best isn't
+            bestResult = { output: currentOutput, isTriad: isTriad, rootMatch: false };
+            bestOutput = currentOutput; // Keep this as a backup if no perfect match found later
+          }
+        }
+      }
+
+      document.getElementById("chordResult").innerHTML = bestOutput || "Could not identify a common chord from the selected notes.";
+    }
+
+    function chordNamesFromIntervals(intervals) {
+      const chordMap = {
+        '0,4,7': ['Major'],
+        '0,3,7': ['Minor'],
+        '0,3,6': ['Diminished'],
+        '0,4,7,11': ['Maj7', 'Major Seventh'],
+        '0,3,7,10': ['m7', 'Minor Seventh'],
+        '0,4,7,10': ['7', 'Dominant Seventh'],
+        '0,3,6,9': ['dim7', 'Diminished Seventh'],
+        '0,5,7': ['Sus4', 'Suspended 4th'],
+        '0,2,7': ['Sus2', 'Suspended 2nd'],
+        '0,3,7,9': ['m6', 'Minor 6th'],
+        '0,4,8': ['Augmented', 'Aug'],
+        '0,7': ['Power Chord'],
+        '0,2,5,7': ['11th'],
+        '0,4,7,9': ['6', 'Major 6th'],
+        '0,4,8,11': ['Maj7#5', 'Augmented Major Seventh'],
+        '0,3,7,11': ['mMaj7', 'Minor-Major Seventh'],
+        '0,4,7,10,14': ['9', 'Dominant Ninth'],
+        '0,3,7,10,14': ['m9', 'Minor Ninth'],
+        '0,4,7,10,13': ['7b9', 'Dominant Seven Flat Nine'],
+        '0,4,7,10,15': ['7#9', 'Dominant Seven Sharp Nine'],
+        '0,4,7,10,17': ['7(11)'], // 11th implies 7th, 9th, and 4th
+        '0,3,6,10': ['m7b5', 'Half Diminished'],
+        '0,4,7,11,14': ['Maj9', 'Major Ninth'],
+        '0,3,7,11,14': ['mMaj9', 'Minor-Major Ninth'],
+        '0,4,7,10,14,17': ['13', 'Dominant Thirteenth'],
+        '0,3,6,9,12': ['Dim7(add9)'],
+        '0,5,7,10': ['7sus4', 'Dominant Seven Suspended 4th'],
+        // Add more complex chords as needed
+      };
+
+      const key = intervals.join(',');
+
+      // First, try direct match for main names
+      if (chordMap[key]) {
+        // Return only the primary name for direct matches if it's a known chord
+        return [chordMap[key][0]];
+      }
+
+      // If no direct match, try to generate a name based on a foundational triad
+      return generateNameFromIntervals(intervals);
+    }
+
+    function generateNameFromIntervals(intervals) {
+      const triads = [
+        { intervals: [0,4,7], name: "Major" },
+        { intervals: [0,3,7], name: "Minor" },
+        { intervals: [0,3,6], name: "Diminished" },
+        { intervals: [0,4,8], name: "Augmented" },
+      ];
+
+      for (const triad of triads) {
+        if (triad.intervals.every(i => intervals.includes(i))) {
+          const extras = intervals.filter(i => !triad.intervals.includes(i));
+          let extName = "";
+          if (extras.length > 0) {
+            extName = " add(" + extras.map(i => intervalToName(i)).join(",") + ")";
+          }
+          return [triad.name + extName];
+        }
+      }
+
+      // Handle dyads specifically
+      if (intervals.length === 2) {
+        if (intervals.includes(7)) return ['Power Chord'];
+        if (intervals.includes(3)) return ['Dyad (minor 3rd)'];
+        if (intervals.includes(4)) return ['Dyad (major 3rd)'];
+        if (intervals.includes(5)) return ['Dyad (perfect 4th)'];
+        if (intervals.includes(2)) return ['Dyad (major 2nd)'];
+        if (intervals.includes(1)) return ['Dyad (minor 2nd)'];
+        if (intervals.includes(6)) return ['Dyad (tritone)'];
+        if (intervals.includes(9)) return ['Dyad (major 6th)'];
+        if (intervals.includes(10)) return ['Dyad (minor 7th)'];
+        if (intervals.includes(11)) return ['Dyad (major 7th)'];
+      }
+      
+      // Fallback: just list the intervals
+      const names = intervals.map(intervalToName);
+      return [`Custom Chord with intervals: ${names.join(', ')}`];
+    }
+
+    function intervalToName(i) {
+      const map = {
+        0: "R",
+        1: "b2",
+        2: "2",
+        3: "b3",
+        4: "3",
+        5: "4",
+        6: "b5",
+        7: "5",
+        8: "#5",
+        9: "6",
+        10: "b7",
+        11: "7"
+      };
+      return map[i] || `+${i}`; // If an interval isn't directly mapped, just show its semitone value
+    }
+
+    drawFretboard();
+  </script>
+
+    <p><a href="mailto:chopchoppppp@gmail.com">Contact Shreddy!</a></p>
+<div class="small-text">
+  &copy; 2025 Shreddy Roosevelt. All rights reserved.<br>
+  “Shreddy Roosevelt” and “Shreducator” are trademarks of Shreddy Roosevelt.
+</div>
+
+</body>
+</html>
